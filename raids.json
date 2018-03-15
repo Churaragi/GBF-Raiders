@@ -851,17 +851,6 @@
 	"english": "Lvl 60 Procris",
 	"japanese": "Lv60 プロスクリスィ",
 	"room": "lvl60procris",
-<<<<<<< HEAD
-	"image": "/assets/raids/BattleRaid_Cardcaptor_Sakura_Raid_ExtremePlus.png"
-}
-	{
-	"english": "Lvl 75 Vulcarino",
-	"japanese": "Lv75 ヴァルカンライオ",
-	"room": "lvl75vulcarino",
-	"image": "/assets/raids/Vulcarino.png"
-}
-]
-=======
 	"image": "/assets/raids/BattleRaid_Cardcaptor_Sakura_Raid_ExtremePlus.png",
 	"category": "Event",
 	"element": "None"
@@ -1154,4 +1143,3 @@
 	"category": "Impossible Omega II",
 	"element": "Wind"
 }]
->>>>>>> upstream/master
