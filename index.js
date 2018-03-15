@@ -11,7 +11,7 @@ const morgan = require( 'morgan' );
 const moment = require( 'moment' );
 const port = process.env.PORT || 80;
 let io = null;
-let lastTweet = 0;
+let lastTweet = new Date().getTime();
 
 let server = require( 'http' ).createServer( app );
 server.listen( port );
@@ -27,6 +27,20 @@ if ( process.env.sslEnabled === "true" ) {
 	io = require( 'socket.io' ).listen( server );
 }
 
+let twitterOptions = {
+	consumer_key: process.env.consumer_key,
+	consumer_secret: process.env.consumer_secret,
+	token: process.env.access_token_key,
+	token_secret: process.env.access_token_secret
+};
+
+let twitterBackupOptions = {
+	consumer_key: process.env.backup_consumer_key || "",
+	consumer_secret: process.env.backup_consumer_secret || "",
+	token: process.env.backup_access_token_key || "",
+	token_secret: process.env.backup_access_token_secret || ""
+};
+let usingTwitterBackup = false;
 
 function TimedLogger( area, type, data ) {
 	let csvString = moment().format( 'MM/DD/YYYY,HH:mm:ss' ) + "," + area + "," + type + "," + data;
@@ -48,8 +62,17 @@ app.get( '/health-check', ( req, res ) => res.sendStatus( 200 ) );
 
 app.get( '/getraids', function ( req, res ) {
 	res.header( 'Cache-Control', 'public, max-age=432000000' );
-	res.header( 'Access-Control-Allow-Origin', '*' )
+	res.header( 'Access-Control-Allow-Origin', '*' );
 	res.send( raidConfigs );
+} );
+
+app.get( '/serviceWorker.js', function ( req, res ) {
+	res.header( 'Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate' );
+	res.sendFile( __dirname + '/static/serviceWorker.js' );
+} );
+
+app.get( '/', function ( req, res ) {
+	res.sendFile( __dirname + '/static/index.html' );
 } );
 
 app.use( st( {
@@ -65,7 +88,7 @@ app.use( st( {
 			maxAge: 1000 * 60 * 60 * 24 * 7, // how long to cache contents for (milliseconds * seconds * minutes * hours * days)
 		}
 	},
-	passthrough: false
+	passthrough: true
 } ) );
 
 let keywords = "";
@@ -157,61 +180,67 @@ function IsValidTweet( data ) {
 	return result;
 }
 
-function StartTwitterStream() {
+function StartTwitterStream( options ) {
 	TimedLogger( "System", "Starting Twitter Stream", "" );
-	let client = new twitter( {
-		consumer_key: process.env.consumer_key,
-		consumer_secret: process.env.consumer_secret,
-		token: process.env.access_token_key,
-		token_secret: process.env.access_token_secret
-	} );
+	try {
+		let client = new twitter( options );
 
-	client.on( 'tweet', function ( tweet ) {
-		TimedLogger( "Twitter", "Tweet Found", "" );
-		if ( IsValidTweet( tweet ) ) {
-			let raidInfo = {
-				id: GetRaidID( tweet ),
-				user: "@" + tweet.user.screen_name,
-				time: tweet.created_at,
-				room: searchTextForRaids( tweet.text ),
-				message: "No Twitter Message.",
-				language: "JP",
-				status: "unclicked"
-			};
-			if ( DoesTweetContainMessage( tweet ) ) {
-				let tweetMessage = GetTweetMessage( tweet );
-				raidInfo.message = tweetMessage.message;
-				raidInfo.language = tweetMessage.language;
-			} else if ( GetTweetLanguage( tweet ) !== null ) {
-				raidInfo.language = GetTweetLanguage( tweet );
+		client.on( 'tweet', function ( tweet ) {
+			TimedLogger( "Twitter", "Tweet Found", "" );
+			if ( IsValidTweet( tweet ) ) {
+				let raidInfo = {
+					id: GetRaidID( tweet ),
+					user: "@" + tweet.user.screen_name,
+					time: tweet.created_at,
+					room: searchTextForRaids( tweet.text ),
+					message: "No Twitter Message.",
+					language: "JP",
+					status: "unclicked"
+				};
+				if ( DoesTweetContainMessage( tweet ) ) {
+					let tweetMessage = GetTweetMessage( tweet );
+					raidInfo.message = tweetMessage.message;
+					raidInfo.language = tweetMessage.language;
+				} else if ( GetTweetLanguage( tweet ) !== null ) {
+					raidInfo.language = GetTweetLanguage( tweet );
+				}
+				TimedLogger( "Twitter", "Raid Info", JSON.stringify( raidInfo ) );
+				lastTweet = new Date().getTime();
+				io.to( raidInfo.room ).emit( 'tweet', raidInfo );
 			}
-			TimedLogger( "Twitter", "Raid Info", JSON.stringify( raidInfo ) );
-			lastTweet = new Date().getTime();
-			io.to( raidInfo.room ).emit( 'tweet', raidInfo );
-		}
-	} );
+		} );
 
-	client.on( 'error', function ( error ) {
+		client.on( 'error', function ( error ) {
+			TimedLogger( "Twitter", "Error", JSON.stringify( error ) );
+		} );
+
+		client.on( 'reconnect', function ( reconnect ) {
+			TimedLogger( "Twitter", "Reconnect", JSON.stringify( reconnect ) );
+		} );
+
+		client.track( keywords );
+	} catch ( error ) {
 		TimedLogger( "Twitter", "Error", JSON.stringify( error ) );
-	} );
-
-	client.on( 'reconnect', function ( reconnect ) {
-		TimedLogger( "Twitter", "Reconnect", JSON.stringify( reconnect ) );
-	} );
-
-	client.track( keywords );
+	}
 }
 
 setInterval( function () {
-	if ( new Date().getTime() - 300000 > lastTweet ) {
+	if ( new Date().getTime() - 600000 > lastTweet ) {
 		TimedLogger( "Twitter", "No Tweet Warning", "Sending Email..." );
 		io.emit( 'warning', { type: "twitter" } );
 		try {
-			exec( 'echo "There hasn\'t been a tweet in 5 minutes! You should check up on things." | mail -s "Tweet Warning!" gene@pinskiy.us' );
+			exec( 'echo "There hasn\'t been a tweet in 10 minutes! You should check up on things." | mail -s "Tweet Warning!" gene@pinskiy.us' );
 			lastTweet = new Date().getTime();
 			setTimeout( function () {
 				TimedLogger( "Twitter", "No Tweet Warning", "Restarting Twitter Client..." );
-				StartTwitterStream();
+				if ( usingTwitterBackup ) {
+					if ( twitterBackupOptions.consumer_key != "" ) {
+						StartTwitterStream( twitterBackupOptions );
+					}
+				} else {
+					StartTwitterStream( twitterOptions );
+				}
+				usingTwitterBackup = !usingTwitterBackup;
 			}, 500 );
 		} catch ( error ) {
 			TimedLogger( "Twitter", "No Tweet Error", JSON.stringify( error ) );
@@ -226,7 +255,10 @@ io.sockets.on( 'connection', function ( socket ) {
 			TimedLogger( "Socket", "Room Subscribed", data.room );
 			socket.join( data.room );
 		} );
-
+	socket.on( 'raid-over',
+		function ( data ) {
+			io.to( data.room ).emit( 'raid-over', data );
+		} );
 	socket.on( 'unsubscribe',
 		function ( data ) {
 			TimedLogger( "Socket", "Room Unsubscribed", data.room );
@@ -235,4 +267,4 @@ io.sockets.on( 'connection', function ( socket ) {
 } );
 
 TimedLogger( "System", "Starting GBF Raiders", "Port " + port );
-StartTwitterStream();
+StartTwitterStream( twitterOptions );

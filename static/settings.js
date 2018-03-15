@@ -1,16 +1,12 @@
 function SetupSettingsModal( raid ) {
-	if ( settings.debugLevel > 0 ) {
-		console.log( "Setting up settings modal for raid: " + raid.room );
-	}
+	console.log( "Setting up settings modal for raid: " + raid.room );
 	document.getElementById( "settings-modal" ).dataset.room = raid.room;
 	document.getElementById( "settings-modal-header" ).innerHTML = raid.english;
 	document.getElementById( "settings-modal-image" ).src = raid.image;
 	for ( var i = 0; i < individualSettings.length; i++ ) {
 		if ( raid.room === individualSettings[ i ].room ) {
-			if ( settings.debugLevel > 0 ) {
-				console.log( "Settings for selected raid:" );
-				console.dir( individualSettings[ i ] );
-			}
+			console.log( "Settings for selected raid:" );
+			console.dir( individualSettings[ i ] );
 			if ( individualSettings[ i ].settings.desktopNotifOn ) {
 				document.getElementById( "modal-enable-notif" ).innerHTML = 'Disable Desktop Notifications<i class="right remove circle icon"></i>';
 				document.getElementById( "modal-enable-notif" ).classList.add( "negative" );
@@ -59,9 +55,7 @@ function SetupSettingsModal( raid ) {
 function SaveIndividualSettings() {
 	for ( var i = 0; i < individualSettings.length; i++ ) {
 		if ( document.getElementById( "settings-modal" ).dataset.room === individualSettings[ i ].room ) {
-			if ( settings.debugLevel > 0 ) {
-				console.log( "Saving individual settings for raid: " + individualSettings[ i ].room );
-			}
+			console.log( "Saving individual settings for raid: " + individualSettings[ i ].room );
 			if ( document.getElementById( "modal-enable-sound" ).innerHTML === 'Disable Sound Notifications<i class="right alarm mute outline icon"></i>' ) {
 				individualSettings[ i ].settings.soundNotifOn = true;
 			} else {
@@ -75,10 +69,8 @@ function SaveIndividualSettings() {
 			individualSettings[ i ].settings.desktopNotifSize = document.getElementById( "modal-desktop-notif-size-input" ).value;
 			individualSettings[ i ].settings.soundNotifChoice = document.getElementById( "modal-sound-choice-input" ).value;
 			individualSettings[ i ].settings.soundNotifVolume = document.getElementById( "modal-sound-volume-slider" ).value;
-			if ( settings.debugLevel > 0 ) {
-				console.log( "Saved individual settings for raid: " + individualSettings[ i ].room );
-				console.dir( individualSettings[ i ] );
-			}
+			console.log( "Saved individual settings for raid: " + individualSettings[ i ].room );
+			console.dir( individualSettings[ i ] );
 			localStorage.setItem( "individualSettings", JSON.stringify( individualSettings ) );
 			break;
 		}
@@ -86,9 +78,7 @@ function SaveIndividualSettings() {
 }
 
 function CreateSettingsModalFrame() {
-	if ( settings.debugLevel > 0 ) {
-		console.log( "Creating Settings Modal..." );
-	}
+	console.log( "Creating Settings Modal..." );
 	var result = '<div id="settings-modal" class="ui modal">';
 	result += '<div id="settings-modal-header" class="header">Lvl ??? Raid Boss</div>';
 	result += '<div class="image content">';
@@ -102,6 +92,22 @@ function CreateSettingsModalFrame() {
 	result += '<div class="item" data-value="lily-event-ringring">GBF - Lily (Event) - Ring Ring</div>';
 	result += '<div class="item" data-value="andira-oniichan">GBF - Andira - Onii-chan</div>';
 	result += '<div class="item" data-value="titanfall-droppingnow">Titanfall - Dropping Now</div>';
+	result += '<div class="item" data-value="sakura-hoeeeee">GBF - Sakura (Event) - HOEEEEE</div>';
+	result += '<div class="item" data-value="alarm-foghorn">Alarm - Foghorn</div>';
+	result += '<div class="item" data-value="alarm-submarine">Alarm - Submarine</div>';
+	result += '<div class="item" data-value="scifi-sweep">Sci Fi Sweep</div>';
+	result += '<div class="item" data-value="female-gogogo">Female - "Go Go Go!"</div>';
+	result += '<div class="item" data-value="male-gogogo">Male - "Go Go Go!"</div>';
+	result += '<div class="item" data-value="female-hurryup">Female - "Hurry Up!"</div>';
+	result += '<div class="item" data-value="male-hurryup">Male - "Hurry Up!"</div>';
+	result += '<div class="item" data-value="jingle-nes">Jingle - NES</div>';
+	result += '<div class="item" data-value="jingle-sax">Jingle - Sax</div>';
+	result += '<div class="item" data-value="jingle-steel">Jingle - Steel Drum</div>';
+	result += '<div class="item" data-value="jingle-steel2">Jingle - Steel Drum 2</div>';
+	result += '<div class="item" data-value="zap-3tone">Zap - Three Tone</div>';
+	result += '<div class="item" data-value="zap-2tone">Jingle - Two Tone</div>';
+	result += '<div class="item" data-value="magic-spell">Magic Spell</div>';
+	result += '<div class="item" data-value="custom">Custom</div>';
 	result += '</div></div></span>';
 	result += '<span id="modal-sound-volume-control" class="slider-control-disabled"><span class="slider-title">Sound Notification Volume</span><input id="modal-sound-volume-slider" class="slider-range slider" type="range" min="0" max="100" value="100" disabled></span>';
 	result += '</div></div>';
@@ -113,37 +119,43 @@ function CreateSettingsModalFrame() {
 }
 
 function LoadSavedSettings() {
-	if ( settings.debugLevel > 0 ) {
-		console.log( "Loading settings from localstorage..." );
-	}
+	console.log( "Loading settings from localstorage..." );
 	if ( localStorage.getItem( "savedSettings" ) ) {
-		if ( settings.debugLevel > 0 ) {
-			console.log( "Found settings in localstorage." );
-		}
+		console.log( "Found settings in localstorage." );
 		try {
 			var tempSettings = JSON.parse( localStorage.getItem( "savedSettings" ) );
+			if ( tempSettings.version === settings.version ) {
+				console.log( "Loaded version matches current version." );
+				settings.newsSeen = tempSettings.newsSeen;
+			} else {
+				console.log( "Loaded version does not match current version." );
+				settings.newsSeen = false;
+			}
+			try {
+				Object.assign( settings.notification, tempSettings.notification );
+				Object.assign( settings.layout, tempSettings.layout );
+				settings.viramateID = tempSettings.viramateID;
+				settings.disableJoined = tempSettings.disableJoined;
+				settings.strikeTime = tempSettings.strikeTime;
+				console.log( "Assigned saved settings to current settings." );
+			} catch ( error ) {
+				console.log( "Error assigning saved settings to current settings: " + error );
+			}
 		} catch ( error ) {
 			console.log( "Error parsing settings from localstorage: " + error );
 		}
-		if ( tempSettings.version === settings.version ) {
-			if ( settings.debugLevel > 0 ) {
-				console.log( "Loaded version matches current version." );
-			}
-			settings.newsSeen = tempSettings.newsSeen;
-		} else {
-			if ( settings.debugLevel > 0 ) {
-				console.log( "Loaded version does not match current version." );
-			}
-			settings.newsSeen = false;
+
+		document.getElementById( "viramate-id-input" ).value = settings.viramateID;
+		if ( document.getElementById( "viramate-api" ) !== null ) {
+			document.getElementById( "viramate-api" ).src = "chrome-extension://" + settings.viramateID + "/content/api.html";
 		}
-		try {
-			Object.assign( settings.notification, tempSettings.notification );
-			Object.assign( settings.layout, tempSettings.layout );
-		} catch ( error ) {
-			console.log( "Error assigning saved settings to current settings: " + error );
+		document.getElementById( "time-picker" ).value = settings.strikeTime;
+		SetTime();
+		if ( settings.disableJoined ) {
+			document.getElementById( "join-disable-input" ).checked = true;
 		}
-		if ( !settings.newsSeen ) {
-			document.getElementById( "news-message" ).classList.remove( "hidden" );
+		if ( settings.newsSeen ) {
+			document.getElementById( "news-message" ).classList.add( "hidden" );
 		}
 		if ( settings.notification.desktopNotifOn ) {
 			document.getElementById( "enable-notif" ).innerHTML = 'Disable Desktop Notifications<i class="right remove circle icon"></i>';
@@ -162,6 +174,8 @@ function LoadSavedSettings() {
 			document.getElementById( "sound-choice-control" ).classList.remove( "input-control-disabled" );
 			document.getElementById( "sound-choice-control" ).classList.add( "input-control" );
 			document.getElementById( "sound-choice-dropdown" ).classList.remove( "disabled" );
+			document.getElementById( "sound-input-control" ).classList.remove( "input-control-disabled" );
+			document.getElementById( "sound-input-control" ).classList.add( "input-control" );
 		}
 		document.getElementById( "sound-volume-slider" ).value = settings.notification.soundNotifVolume;
 		document.getElementById( "sound-choice-input" ).value = settings.notification.soundNotifChoice;
@@ -199,17 +213,16 @@ function LoadSavedSettings() {
 				console.log( "Error assigning saved individual settings to current individual settings: " + error );
 			}
 		}
-		SetupTable();
 	}
+	SetupTable();
 }
 
 function SetupControls() {
+	console.log( "Setting up controls..." );
 	try {
 		var clipboard = new Clipboard( '.copy-div', {
 			text: function ( trigger ) {
-				if ( settings.debugLevel > 0 ) {
-					console.log( "Copying to clipboard: " + trigger.dataset.clipboard );
-				}
+				console.log( "Copying to clipboard: " + trigger.dataset.clipboard );
 				return trigger.dataset.clipboard;
 			}
 		} );
@@ -230,15 +243,92 @@ function SetupControls() {
 			}
 		} );
 
+		$( "#filter-dropdown" ).dropdown( {
+			onChange: function ( value, text, $selectedItem ) {
+				let filteredRaids = GetFilteredRaids();
+				$( '.ui.search' ).search( 'clear cache' );
+				$( '.ui.search' ).search( 'setting', 'source', filteredRaids );
+			}
+		} );
+
+		document.getElementById( "join-disable-input" ).addEventListener( 'change', function ( evt ) {
+			if ( document.getElementById( "join-disable-input" ).checked ) {
+				settings.disableJoined = true;
+			} else {
+				settings.disableJoined = false;
+			}
+			localStorage.setItem( "savedSettings", JSON.stringify( settings ) );
+		} );
+
+		document.getElementById( "time-picker" ).addEventListener( 'input', function ( evt ) {
+			settings.strikeTime = evt.target.value;
+			localStorage.setItem( "savedSettings", JSON.stringify( settings ) );
+			SetTime();
+		} );
+
+		setInterval( function () {
+			SetTime();
+		}, 10000 );
+
+		document.getElementById( "view-statistics" ).addEventListener( 'click', function () {
+			var statsTable = document.createElement( "table" );
+			var statsTableBody = document.createElement( "tbody" );
+			if ( statistics.succeded.total == 0 && statistics.failed.total == 0 ) {
+				var statsTableBodyRow = document.createElement( "tr" );
+				var statsTableBodyRowTD = document.createElement( "td" );
+				statsTableBodyRowTD.innerHTML = "No statistics so far!";
+				statsTableBodyRow.appendChild( statsTableBodyRowTD );
+				statsTableBody.appendChild( statsTableBodyRow );
+			} else {
+				statistics.succeded.individual.forEach( function ( statItem ) {
+					var statsTableBodyRow = document.createElement( "tr" );
+					var statsTableBodyRowRoomTD = document.createElement( "td" );
+					statsTableBodyRowRoomTD.innerHTML = statItem.room + " joined:";
+					var statsTableBodyRowCountTD = document.createElement( "td" );
+					statsTableBodyRowCountTD.innerHTML = statItem.count + " time(s)";
+					statsTableBodyRow.appendChild( statsTableBodyRowRoomTD );
+					statsTableBodyRow.appendChild( statsTableBodyRowCountTD );
+					statsTableBody.appendChild( statsTableBodyRow );
+				} );
+				statistics.failed.individual.forEach( function ( statItem ) {
+					var statsTableBodyRow = document.createElement( "tr" );
+					var statsTableBodyRowRoomTD = document.createElement( "td" );
+					statsTableBodyRowRoomTD.innerHTML = statItem.room + " failed:";
+					var statsTableBodyRowCountTD = document.createElement( "td" );
+					statsTableBodyRowCountTD.innerHTML = statItem.count + " time(s)";
+					statsTableBodyRow.appendChild( statsTableBodyRowRoomTD );
+					statsTableBodyRow.appendChild( statsTableBodyRowCountTD );
+					statsTableBody.appendChild( statsTableBodyRow );
+				} );
+			}
+			statsTable.appendChild( statsTableBody );
+
+			swal( {
+				title: "Current Statistics",
+				content: statsTable
+			} );
+		} );
+
 		document.getElementById( "enable-sound" ).addEventListener( "click", function ( event ) {
 			console.dir( event );
 			ToggleSoundNotifications( true )
 		} );
+
+		document.getElementById( "local-file-input" ).addEventListener( "change", function () {
+			console.log( "Changing custom sound notif..." );
+			customSoundNotif.src = URL.createObjectURL( this.files[ 0 ] );
+			customSoundNotif.onend = function ( e ) {
+				URL.revokeObjectURL( this.src );
+			}
+		} );
+
 		document.getElementById( "viramate-id-input" ).addEventListener( 'input', function ( event ) {
+			console.log( "Changing Viramate id to " + event.target.value );
 			settings.viramateID = event.target.value;
 			localStorage.setItem( "savedSettings", JSON.stringify( settings ) );
-			if (document.getElementById("viramate-api") !== null) {
-				document.getElementById("viramate-api").src = "chrome-extension://" + settings.viramateID + "/content/api.html";
+			if ( document.getElementById( "viramate-api" ) !== null ) {
+				document.getElementById( "viramate-api" ).src = "chrome-extension://" + settings.viramateID + "/content/api.html";
+				document.getElementById( "viramate-api" ).contentWindow.console.log = function () {};
 			}
 		} );
 		document.getElementById( "sound-volume-slider" ).addEventListener( "input", function ( event ) {
@@ -368,9 +458,7 @@ function SetupControls() {
 		} );
 
 		document.getElementById( "open-settings" ).addEventListener( 'click', function ( event ) {
-			if ( settings.debugLevel > 0 ) {
-				console.log( "Opening settings bar..." );
-			}
+			console.log( "Opening settings bar..." );
 			try {
 				$( '.ui.sidebar' ).sidebar( 'toggle' );
 			} catch ( error ) {
@@ -379,9 +467,7 @@ function SetupControls() {
 		} );
 
 		document.getElementById( "clear-list" ).addEventListener( "click", function ( event ) {
-			if ( settings.debugLevel > 0 ) {
-				console.log( "Clearing all raids from tables..." );
-			}
+			console.log( "Clearing all raids from tables..." );
 			raids = [];
 			try {
 				if ( settings.layout.orientation === "horizontal" ) {
@@ -469,28 +555,27 @@ function SetupControls() {
 
 		$( '.ui.search' )
 			.search( {
-				source: raidConfigs,
+				source: GetFilteredRaids(),
 				searchFields: [
 					'english',
 					'japanese'
 				],
-				searchFullText: true,
+				fullTextSearch: true,
 				fields: {
 					title: 'english',
+					description: 'element'
 				},
+				cache: false,
 				maxResults: 10,
 				onSelect: function ( result, response ) {
-					if ( settings.debugLevel > 0 ) {
-						console.log( "Adding selected raid..." );
-					}
+					console.log( "Adding selected raid..." );
 					try {
 						AddSelectedRaid( result.room );
+						document.getElementById( "search-input" ).value = "";
 					} catch ( error ) {
 						console.log( "Error adding raid to selected raids: " + error );
 					}
-					setTimeout( function () {
-						document.getElementById( "searcher" ).value = "";
-					}, 50 );
+					return false;
 				},
 				showNoResults: true
 			} );
@@ -502,9 +587,7 @@ function SetupControls() {
 }
 
 function ToggleDesktopNotifications( clicked ) {
-	if ( settings.debugLevel > 0 ) {
-		console.log( "Toggling desktop notifications..." );
-	}
+	console.log( "Toggling desktop notifications..." );
 	if ( settings.notification.desktopNotifOn === false ) {
 		if ( Notification.permission !== "denied" ) {
 			Notification.requestPermission( function ( permission ) {
@@ -551,9 +634,7 @@ function ToggleDesktopNotifications( clicked ) {
 }
 
 function ToggleSoundNotifications( clicked ) {
-	if ( settings.debugLevel > 0 ) {
-		console.log( "Toggling sound notifications..." );
-	}
+	console.log( "Toggling sound notifications..." );
 	if ( settings.notification.soundNotifOn === false ) {
 		settings.notification.soundNotifOn = true;
 		if ( settings.layout.orientation === "vertical" ) {
@@ -568,6 +649,8 @@ function ToggleSoundNotifications( clicked ) {
 		document.getElementById( "sound-volume-slider" ).disabled = false;
 		document.getElementById( "sound-choice-control" ).classList.remove( "input-control-disabled" );
 		document.getElementById( "sound-choice-control" ).classList.add( "input-control" );
+		document.getElementById( "sound-input-control" ).classList.remove( "input-control-disabled" );
+		document.getElementById( "sound-input-control" ).classList.add( "input-control" );
 		document.getElementById( "sound-choice-dropdown" ).classList.remove( "disabled" );
 		localStorage.setItem( "savedSettings", JSON.stringify( settings ) );
 		if ( clicked ) {
@@ -586,6 +669,8 @@ function ToggleSoundNotifications( clicked ) {
 		document.getElementById( "sound-volume-control" ).classList.add( "slider-control-disabled" );
 		document.getElementById( "sound-choice-control" ).classList.remove( "input-control" );
 		document.getElementById( "sound-choice-control" ).classList.add( "input-control-disabled" );
+		document.getElementById( "sound-input-control" ).classList.add( "input-control-disabled" );
+		document.getElementById( "sound-input-control" ).classList.remove( "input-control" );
 		document.getElementById( "sound-choice-dropdown" ).classList.add( "disabled" );
 		document.getElementById( "sound-volume-slider" ).disabled = true;
 		localStorage.setItem( "savedSettings", JSON.stringify( settings ) );

@@ -1,4 +1,4 @@
-const version = '0.0.1'
+const version = '0.0.12';
 let precachename = 'gbfraiders-precache-' + version;
 let dynamicname = 'gbfraiders-dynamic-' + version;
 let precachedResourcesAsDependency = [
@@ -22,8 +22,6 @@ let precachedResourcesWithoutDependency = [
 	'draggable/EasePack.min.js',
 	'draggable/TweenLite.min.js',
 	'assets/stickers/nope-sticker.png',
-	'sweetalert/sweetalert.min.js',
-	'sweetalert/sweetalert.min.css',
 	'sliders.css'
 ];
 
@@ -35,20 +33,27 @@ self.addEventListener( 'install', function ( event ) {
 			return cache.addAll( precachedResourcesAsDependency );
 		} )
 	);
-	console.log( 'ServiceWorker finished installing.' )
+	console.log( `ServiceWorker ${version} finished installing.` );
 } );
 
 self.addEventListener( 'fetch', function ( event ) {
 	let request = event.request.clone();
 	let requestURL = new URL( event.request.url );
-	if ( /EIO=3&transport=polling/.test( requestURL.search ) ) {
+	console.log( "Service Worker - fetching request: " + requestURL.href, requestURL );
+	if ( requestURL.pathname == "/socket.io/" ) {
 		event.respondWith(
 			NetworkOnly( request )
 		);
-	} else if ( /getraids/.test( requestURL.pathname ) ) {
+	} else if ( requestURL.pathname == "/getraids" || requestURL.pathname == "/index.html" || requestURL.pathname == "/main.js" || requestURL.pathname == "/raids.js" || requestURL.pathname == "/settings.js" ) {
 		event.respondWith(
 			NetworkFallingBackToCache( request )
 		);
+	} else if ( requestURL.pathname == '/' ) {
+		event.respondWith(
+			NetworkFallingBackToCache( '/' )
+		);
+	} else if ( requestURL.protocol == "chrome-extension:" ) {
+		return;
 	} else {
 		event.respondWith(
 			CacheFallingBackToNetwork( request )
@@ -57,28 +62,36 @@ self.addEventListener( 'fetch', function ( event ) {
 } );
 
 function CacheOnly( request ) {
+	console.log( "Checking only cache for response..." );
 	return caches.match( request )
 		.then( function ( cacheResponse ) {
+			console.log( "Found response in cache." );
 			return cacheResponse;
 		} );
 }
 
 function NetworkOnly( request ) {
-	return fetch( request );
+	console.log( "Getting response straight from network..." );
+	return fetch( request, { cache: 'no-store' } );
 }
 
 function NetworkFallingBackToCache( request ) {
-	return fetch( request )
+	console.log( "Getting reponse from network with cache fallback..." );
+	return fetch( request, { cache: 'no-store' } )
 		.catch( function ( error ) {
+			console.log( `Failed to get response from network: ${error}` );
+			console.log( "Checking cache for fallback..." );
 			return caches.match( request );
 		} );
 }
 
 function CacheFallingBackToNetwork( request ) {
+	console.log( "Getting reponse from cache with network fallback..." );
 	return caches.match( request )
 		.then( function ( cacheResponse ) {
-			return cacheResponse || fetch( request )
+			return cacheResponse || fetch( request, { cache: 'no-store' } )
 				.then( function ( networkResponse ) {
+					console.log( "Failed to get response from cache. Retrieved response from network and placing it in cache..." );
 					return caches.open( dynamicname )
 						.then( function ( cache ) {
 							if ( [ 0, 200 ].includes( networkResponse.status ) ) {
@@ -109,5 +122,5 @@ self.addEventListener( 'activate', function ( event ) {
 			);
 		} )
 	);
-	console.log( 'ServiceWorker finished activating.' )
+	console.log( `ServiceWorker ${version} finished activating.` );
 } );
