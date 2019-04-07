@@ -217,11 +217,11 @@ if ( cluster.isMaster ) {
 				key: fs.readFileSync( __dirname + '/sslcert/privkey.pem' )
 			};
 			let sslServer = https.createServer( options );
-			sslServer.listen( 8080 );
+			sslServer.listen( 80 );
 			io = require( 'socket.io' ).listen( sslServer );
 		} else {
 			let server = require( 'http' ).createServer();
-			server.listen( 8080 );
+			server.listen( 80 );
 			io = require( 'socket.io' ).listen( server );
 		}
 		io.sockets.on( 'connection', function ( socket ) {
@@ -265,9 +265,10 @@ if ( cluster.isMaster ) {
 		};
 		let sslServer = https.createServer( options, app );
 		sslServer.listen( 443 );
+	} else {
+		let server = require( 'http' ).createServer( app );
+		server.listen( 8080 );
 	}
-	let server = require( 'http' ).createServer( app );
-	server.listen( 80 );
 	app.set( 'json spaces', 0 );
 	app.use( helmet() );
 	//app.use( morgan( 'combined' ) );
