@@ -6,6 +6,7 @@ var individualSettings = [];
 var wasDown = false;
 var noTwitter = false;
 
+var funfNotif = new Audio( '/assets/sounds/funf.mp3' );
 var beepsSoundNotif = new Audio( '/assets/sounds/Beeps_Appear.wav' );
 var lilyRingRingSoundNotif = new Audio( '/assets/sounds/Lily_Event_RingRing.mp3' );
 var andiraOniichanSoundNotif = new Audio( '/assets/sounds/Andira_Oniichan.mp3' );
@@ -44,13 +45,32 @@ var settings = {
 		nightMode: false,
 		toolbarShrink: false
 	},
-	version: "3.6",
+	version: "4.8",
 	newsSeen: false,
 	cardSlots: 8,
+	disablePopups: false,
 	strikeTime: "",
 	disableJoined: false,
 	viramateID: "fgpokpknehglcioijejfeebigdnbnokj"
 };
+
+toastr.options = {
+	"closeButton": false,
+	"debug": false,
+	"newestOnTop": false,
+	"progressBar": false,
+	"positionClass": "toast-top-center",
+	"preventDuplicates": false,
+	"onclick": null,
+	"showDuration": "300",
+	"hideDuration": "1000",
+	"timeOut": "5000",
+	"extendedTimeOut": "1000",
+	"showEasing": "swing",
+	"hideEasing": "linear",
+	"showMethod": "fadeIn",
+	"hideMethod": "fadeOut"
+}
 
 var statistics = {
 	"succeded": {
@@ -63,24 +83,28 @@ var statistics = {
 	}
 };
 
+function ResetSite() {
+	localStorage.clear();
+	window.history.pushState( {}, document.title, "/" );
+	location.reload( true );
+}
+
 function CheckConnectionStatus() {
-	if ( socket.connected ) {
+	if ( socket.connected && wasDown ) {
 		document.getElementById( "connection-status" ).classList.remove( "red" );
 		document.getElementById( "connection-status" ).classList.add( "green" );
 		document.getElementById( "connection-status-value" ).innerHTML = "UP";
-		if ( wasDown ) {
-			console.log( "Recovering from connection down..." );
-			if ( localStorage.getItem( "selectedRaids" ) ) {
-				var tempSelectedRaids = JSON.parse( localStorage.getItem( "selectedRaids" ) );
-				for ( var i = 0; i < tempSelectedRaids.length; i++ ) {
-					socket.emit( 'subscribe', {
-						room: tempSelectedRaids[ i ]
-					} );
-				}
+		console.log( "Recovering from connection down..." );
+		if ( localStorage.getItem( "selectedRaids" ) ) {
+			var tempSelectedRaids = JSON.parse( localStorage.getItem( "selectedRaids" ) );
+			for ( var i = 0; i < tempSelectedRaids.length; i++ ) {
+				socket.emit( 'subscribe', {
+					room: tempSelectedRaids[ i ]
+				} );
 			}
 		}
 		wasDown = false;
-	} else {
+	} else if ( !socket.connected ) {
 		document.getElementById( "connection-status" ).classList.remove( "green" );
 		document.getElementById( "connection-status" ).classList.add( "red" );
 		document.getElementById( "connection-status-value" ).innerHTML = "DOWN";
@@ -140,6 +164,12 @@ function ChangeButtonStatus( event, id ) {
 		document.getElementById( id + '-btn' ).innerHTML = 'Full Raid<i class="right users icon"></i>';
 		document.getElementById( id + '-btn' ).disabled = true;
 		FindRaid( id ).status = "error";
+	} else if ( event === "popup: You can only provide backup in up to three raid battles at once." ) {
+		document.getElementById( id + '-btn' ).classList.remove( "secondary" );
+		document.getElementById( id + '-btn' ).classList.add( "yellow", "blocked" );
+		document.getElementById( id + '-btn' ).innerHTML = 'Pending Battles<i class="right help icon"></i>';
+		document.getElementById( id + '-btn' ).disabled = false;
+		FindRaid( id ).status = "error";
 	} else if ( event === "popup: The number that you entered doesn't match any battle." ) {
 		document.getElementById( id + '-btn' ).classList.remove( "secondary" );
 		document.getElementById( id + '-btn' ).classList.remove( "negative" );
@@ -165,12 +195,11 @@ function ChangeButtonStatus( event, id ) {
 		document.getElementById( id + '-btn' ).innerHTML = 'Rank Low<i class="right user plus icon"></i>';
 		document.getElementById( id + '-btn' ).disabled = true;
 		FindRaid( id ).status = "error";
-	} else if ( evt.data.result === "popup: Check your pending battles." ) {
+	} else if ( event === "popup: Check your pending battles." ) {
 		document.getElementById( id + '-btn' ).classList.remove( "secondary" );
 		document.getElementById( id + '-btn' ).classList.remove( "negative" );
 		document.getElementById( id + '-btn' ).classList.add( "yellow" );
 		document.getElementById( id + '-btn' ).innerHTML = 'Pending Battles<i class="right help icon"></i>';
-		document.getElementById( id + '-btn' ).disabled = true;
 		FindRaid( id ).status = "error";
 	} else if ( event === "already in this raid" ) {
 		document.getElementById( id + '-btn' ).classList.remove( "secondary" );
@@ -195,22 +224,54 @@ function ChangeButtonStatus( event, id ) {
 	}
 }
 
+function CompareRaidEnemyHealths( a, b ) {
+	return b.hpMax - a.hpMax;
+}
+
 function onMessage( evt ) {
+	if ( evt.data === null ) {
+		return;
+	}
 	console.log( "Viramate message recieved." );
-	if ( evt.data.type !== "result" ) {
+	if ( evt.data.type === "apiEvent:actionResult" ) {
+		if ( evt.data.combatState.raidCode ) {
+			if ( FindRaid( evt.data.combatState.raidCode ) ) {
+				console.log( "Raid exists on page, parsing and sending raid health..." );
+				let mainEnemies = evt.data.combatState.enemies.filter( e => e.hasModeGauge == 1 ).sort( CompareRaidEnemyHealths );
+				socket.emit( 'raid-health-submit', {
+					room: FindRaid( evt.data.combatState.raidCode ).room,
+					id: evt.data.combatState.raidCode,
+					currentHP: mainEnemies[ 0 ].hp,
+					maxHP: mainEnemies[ 0 ].hpMax,
+					percent: ( ( mainEnemies[ 0 ].hp / mainEnemies[ 0 ].hpMax ) * 100 ).toFixed( 2 )
+				} );
+			} else {
+				console.log( "Raid doesn't exists on page, parsing and sending raid health to store..." );
+				let mainEnemies = evt.data.combatState.enemies.filter( e => e.hasModeGauge == 1 ).sort( CompareRaidEnemyHealths );
+				socket.emit( 'raid-health-store', {
+					id: evt.data.combatState.raidCode,
+					currentHP: mainEnemies[ 0 ].hp,
+					maxHP: mainEnemies[ 0 ].hpMax,
+					percent: ( ( mainEnemies[ 0 ].hp / mainEnemies[ 0 ].hpMax ) * 100 ).toFixed( 2 )
+				} );
+			}
+		}
+	} else if ( evt.data.type !== "result" ) {
 		console.log( "Viramate message not a result." );
 		return;
 	} else {
-		console.log( "Viramate message:", evt.data );
+		console.log( "Viramate message is a result.", evt.data );
 		ChangeButtonStatus( evt.data.result, evt.data.id );
 		if ( evt.data.result === "refill required" ) {
-			swal( {
-				title: "No more BP!",
-				text: "Please refill your BP or try again later.",
-				icon: "assets/stickers/waitup-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "No more BP!",
+					text: "Please refill your BP or try again later.",
+					icon: "assets/stickers/waitup-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "popup: This raid battle has already ended." ) {
 			AddStatistic( evt.data.id, false );
 			socket.emit( 'raid-over', {
@@ -218,29 +279,37 @@ function onMessage( evt ) {
 				id: evt.data.id,
 				event: evt.data.result
 			} );
-			swal( {
-				title: "Raid has ended!",
-				text: "Please try a different raid.",
-				icon: "assets/stickers/fail-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			data.percent = 0;
+			UpdateRaidHealth( data );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Raid has ended!",
+					text: "Please try a different raid.",
+					icon: "assets/stickers/fail-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result.error === "api disabled" ) {
-			swal( {
-				title: "Viramate Web API is disabled!",
-				text: "Please enable the web API in Viramate, refresh your GBF tab, and try again.",
-				icon: "/assets/stickers/aboutthat-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Viramate Web API is disabled!",
+					text: "Please enable the web API in Viramate, refresh your GBF tab, and try again.",
+					icon: "/assets/stickers/aboutthat-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result.error === "No granblue tab found" ) {
-			swal( {
-				title: "You don't have Granblue open!",
-				text: "Please open the game and then try joining a raid.",
-				icon: "assets/stickers/aboutthat-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "You don't have Granblue open!",
+					text: "Please open the game and then try joining a raid.",
+					icon: "assets/stickers/aboutthat-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "popup: This raid battle is full. You can't participate." ) {
 			AddStatistic( evt.data.id, false );
 			socket.emit( 'raid-over', {
@@ -248,13 +317,15 @@ function onMessage( evt ) {
 				id: evt.data.id,
 				event: evt.data.result
 			} );
-			swal( {
-				title: "Raid is full!",
-				text: "Please try a different raid.",
-				icon: "assets/stickers/sorry-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Raid is full!",
+					text: "Please try a different raid.",
+					icon: "assets/stickers/sorry-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "popup: The number that you entered doesn't match any battle." ) {
 			AddStatistic( evt.data.id, false );
 			socket.emit( 'raid-over', {
@@ -262,56 +333,78 @@ function onMessage( evt ) {
 				id: evt.data.id,
 				event: evt.data.result
 			} );
-			swal( {
-				title: "Error with Raid ID!",
-				text: "Sorry, but that raid ID doesn't match any raid.",
-				icon: "/assets/stickers/totallycrushed-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Error with Raid ID!",
+					text: "Sorry, but that raid ID doesn't match any raid.",
+					icon: "/assets/stickers/totallycrushed-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "popup: Your rank isn't high enough to participate in this battle.<br><div class='pop-text-yellow'>Requirements: Rank 101</div>" ) {
 			AddStatistic( evt.data.id, false );
-			swal( {
-				title: "Sorry!",
-				text: "Your rank is too low! You need to be at least rank 101.",
-				icon: "/assets/stickers/totallycrushed-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Sorry!",
+					text: "Your rank is too low! You need to be at least rank 101.",
+					icon: "/assets/stickers/totallycrushed-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
+		} else if ( evt.data.result === "popup: You can only provide backup in up to three raid battles at once." ) {
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Check your raid battles!",
+					text: "You can only provide backup in up to three raid battles at once.",
+					icon: "assets/stickers/whoops-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "popup: Check your pending battles." ) {
-			swal( {
-				title: "Check your pending battles!",
-				text: "You are a part of too many battles.",
-				icon: "assets/stickers/whoops-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Check your pending battles!",
+					text: "You are a part of too many battles.",
+					icon: "assets/stickers/whoops-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "popup: Your rank isn't high enough to participate in this battle.<br><div class='pop-text-yellow'>Requirements: Rank 50</div>" ) {
 			AddStatistic( evt.data.id, false );
-			swal( {
-				title: "Sorry!",
-				text: "Your rank is too low! You need to be at least rank 50.",
-				icon: "/assets/stickers/totallycrushed-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Sorry!",
+					text: "Your rank is too low! You need to be at least rank 50.",
+					icon: "/assets/stickers/totallycrushed-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "popup: Your rank isn't high enough to participate in this battle.<br><div class='pop-text-yellow'>Requirements: Rank 40</div>" ) {
 			AddStatistic( evt.data.id, false );
-			swal( {
-				title: "Sorry!",
-				text: "Your rank is too low! You need to be at least rank 40.",
-				icon: "/assets/stickers/totallycrushed-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "Sorry!",
+					text: "Your rank is too low! You need to be at least rank 40.",
+					icon: "/assets/stickers/totallycrushed-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "already in this raid" ) {
-			swal( {
-				title: "You are already in this raid!",
-				text: "Please try a different raid.",
-				icon: "assets/stickers/whoops-sticker.png",
-				imageSize: '150x150',
-				timer: 2000
-			} );
+			if ( !settings.disablePopups ) {
+				swal( {
+					title: "You are already in this raid!",
+					text: "Please try a different raid.",
+					icon: "assets/stickers/whoops-sticker.png",
+					imageSize: '150x150',
+					timer: 2000
+				} );
+			}
 		} else if ( evt.data.result === "ok" ) {
 			AddStatistic( evt.data.id, true );
 			FindRaid( evt.data.id ).status = "success";
@@ -320,7 +413,7 @@ function onMessage( evt ) {
 }
 
 window.addEventListener( 'load', function () {
-	console.log( "Window loaded. Page version: " + settings.version );
+	console.log( "Window loaded.", "Page version: " + settings.version );
 	if ( !navigator.onLine ) {
 		console.log( "Page loaded offline." );
 		swal( {
@@ -353,7 +446,7 @@ window.addEventListener( 'load', function () {
 	window.addEventListener( 'message', onMessage, false );
 
 	console.log( "Getting raid configs..." );
-	fetch( "/getraids" ).then( function ( response ) {
+	fetch( "/getraids", { cache: 'no-store' } ).then( function ( response ) {
 		return response.json();
 	} ).then( function ( raidResults ) {
 		console.log( "Raid configs recieved." );
@@ -362,13 +455,15 @@ window.addEventListener( 'load', function () {
 		try {
 			SetupControls();
 		} catch ( err ) {
-			console.log( "Error setting up controls: " + err );
+			console.log( `Error setting up controls: ${err.message}`, err );
 		}
 
-		socket = io.connect( '/' );
+		socket = io.connect( ':8080/' );
+		document.getElementById( "connection-status" ).classList.remove( "red" );
+		document.getElementById( "connection-status" ).classList.add( "green" );
+		document.getElementById( "connection-status-value" ).innerHTML = "UP";
 		socket.on( 'tweet', function ( data ) {
 			console.log( "Tweet recieved: " + data.room );
-			console.dir( data );
 			document.getElementById( "connection-status" ).classList.remove( "red" );
 			document.getElementById( "connection-status" ).classList.add( "green" );
 			document.getElementById( "connection-status-value" ).innerHTML = "UP";
@@ -381,8 +476,7 @@ window.addEventListener( 'load', function () {
 			}
 		} );
 		socket.on( 'warning', function ( data ) {
-			console.log( "Warning recieved:" );
-			console.dir( data );
+			console.log( "Warning recieved: " + data.room, data );
 			if ( data.type == "twitter" ) {
 				document.getElementById( "connection-status" ).classList.remove( "green" );
 				document.getElementById( "connection-status" ).classList.add( "red" );
@@ -390,48 +484,57 @@ window.addEventListener( 'load', function () {
 				noTwitter = true;
 			}
 		} );
-		socket.on( 'raid-over', function ( data ) {
-			console.log( "Raid-Over recieved: " + data.room );
-			ChangeButtonStatus( data.event, data.id );
+		socket.on( 'raid-health', function ( data ) {
+			console.log( "Raid Health recieved: " + data.room, data );
+			UpdateRaidHealth( data );
 		} );
-		if ( socket.connected ) {
-			document.getElementById( "connection-status" ).classList.remove( "red" );
-			document.getElementById( "connection-status" ).classList.add( "green" );
-			document.getElementById( "connection-status-value" ).innerHTML = "UP";
-		} else {
-			document.getElementById( "connection-status" ).classList.remove( "green" );
-			document.getElementById( "connection-status" ).classList.add( "red" );
-			document.getElementById( "connection-status-value" ).innerHTML = "DOWN";
-		}
-
+		socket.on( 'raid-over', function ( data ) {
+			console.log( "Raid Over recieved: " + data.room, data );
+			ChangeButtonStatus( data.event, data.id );
+			data.percent = 0;
+			UpdateRaidHealth( data );
+		} );
+		CheckConnectionStatus();
 		LoadSavedRaids();
 
 		try {
 			setInterval( function () {
-				if ( !noTwitter ) {
-					CheckConnectionStatus();
-				}
 				if ( selectedRaidsArray.length === 0 && document.getElementById( "selected-raids" ) ) {
 					document.getElementById( "selected-raids" ).innerHTML = "No raids selected. Please search for a raid in the search bar above.";
 				}
-				for ( var i = raids.length - 1; i >= 0; i-- ) {
-					UpdateRaidRow( raids[ i ] );
-				}
 			}, 500 );
-			console.log( 'Setup of page intervals complete.' )
+			setInterval( function () {
+				if ( raids.length > 0 ) {
+					TrimExtraRaids();
+					for ( var i = raids.length - 1; i >= 0; i-- ) {
+						UpdateRaidRow( raids[ i ] );
+					}
+				}
+			}, 1000 );
+			setInterval( function () {
+				if ( !noTwitter ) {
+					CheckConnectionStatus();
+				}
+			}, 10000 );
+			setInterval( function () {
+				fetch( "/getraids", { cache: 'no-store' } ).then( function ( response ) {
+					return response.json();
+				} ).then( function ( raidResults ) {
+					console.log( "Raid configs recieved." );
+					raidConfigs = raidResults;
+				} );
+			}, 7200000 );
+			console.log( "Setup of page intervals complete." );
 		} catch ( err ) {
-			console.log( "Error setting up page interval: " + err );
+			console.log( `Error setting up page interval: ${err.message}`, err );
 		}
-
 	} );
 } );
 
 function PlaySoundNotif( data ) {
-	console.log( "Playing sound notif for: " + data.room );
-	console.log( `Sound Settings: Layout Orientation = ${settings.layout.orientation},  Are Sound Notifs On = ${settings.notification.soundNotifOn},  Sound Notif Choice = ${settings.notification.soundNotifChoice}, Sound Notif Volume = ${settings.notification.soundNotifVolume}` );
+	console.log( `Playing sound notif for: ${data.room}`, settings.notification );
 	if ( settings.layout.orientation === "horizontal" && settings.notification.soundNotifOn ) {
 		try {
-			console.log( "Trying to play sound notif..." );
 			switch ( settings.notification.soundNotifChoice ) {
 				case "alarm-foghorn":
 					alarmFoghornSoundNotif.volume = ( settings.notification.soundNotifVolume / 100 );
@@ -513,17 +616,20 @@ function PlaySoundNotif( data ) {
 					hoeeeeeSoundNotif.volume = ( settings.notification.soundNotifVolume / 100 );
 					hoeeeeeSoundNotif.play();
 					break;
+				case "funf-dancho":
+					funfNotif.volume = ( settings.notification.soundNotifVolume / 100 );
+					funfNotif.play();
+					break;
 			}
-			console.log( "Played sound notif." );
+			console.log( `Played sound notif for: ${data.room}`, settings.notification );
 		} catch ( error ) {
-			console.log( "Error playing sound notif: " + error );
+			console.log( `Error playing sound notif for: ${data.room}`, error, settings.notification );
 		}
 	} else if ( settings.layout.orientation === "vertical" ) {
 		for ( var i = 0; i < individualSettings.length; i++ ) {
 			if ( data.room === individualSettings[ i ].room ) {
 				if ( individualSettings[ i ].settings.soundNotifOn ) {
 					try {
-						console.log( "Trying to play sound notif..." );
 						switch ( individualSettings[ i ].settings.soundNotifChoice ) {
 							case "alarm-foghorn":
 								alarmFoghornSoundNotif.volume = ( individualSettings[ i ].settings.soundNotifVolume / 100 );
@@ -605,10 +711,14 @@ function PlaySoundNotif( data ) {
 								hoeeeeeSoundNotif.volume = ( individualSettings[ i ].settings.soundNotifVolume / 100 );
 								hoeeeeeSoundNotif.play();
 								break;
+							case "funf-dancho":
+								funfNotif.volume = ( individualSettings[ i ].settings.soundNotifVolume / 100 );
+								funfNotif.play();
+								break;
 						}
-						console.log( "Played sound notif." );
+						console.log( `Played sound notif for: ${data.room}`, settings.notification );
 					} catch ( error ) {
-						console.log( "Error playing sound notif: " + error );
+						console.log( `Error playing sound notif for: ${data.room}`, error, settings.notification );
 					}
 				}
 			}
@@ -617,13 +727,11 @@ function PlaySoundNotif( data ) {
 }
 
 function SendDesktopNotif( data ) {
-	console.log( "Sending desktop notif for: " + data.room );
-	console.log( `Desktop Settings: Layout Orientation = ${settings.layout.orientation}, Are Desktop Notifs On = ${settings.notification.desktopNotifOn}, Desktop Notif Size = ${settings.notification.desktopNotifSize}` );
+	console.log( `Sending desktop notif for: ${data.room}`, settings.notification );
 	if ( settings.layout.orientation === "horizontal" && settings.notification.desktopNotifOn ) {
 		if ( Notification.permission === "granted" ) {
 			try {
 				var raidConfig = FindRaidConfig( data.room );
-				console.log( "Trying to send desktop notif..." );
 				var notification = null;
 				var title = "";
 				if ( data.language === "EN" ) {
@@ -664,9 +772,9 @@ function SendDesktopNotif( data ) {
 					document.getElementById( data.id + '-btn' ).classList.add( "negative" );
 					notification.close();
 				}
-				console.log( "Sent desktop notif." );
+				console.log( `Sent desktop notif for: ${data.room}`, settings.notification );
 			} catch ( error ) {
-				console.log( "Error sending desktop notif: " + error );
+				console.log( `Error sending desktop notif for: ${data.room}`, error, settings.notification );
 			}
 		}
 	} else if ( settings.layout.orientation === "vertical" ) {
@@ -677,7 +785,6 @@ function SendDesktopNotif( data ) {
 					if ( Notification.permission === "granted" ) {
 						try {
 							var raidConfig = FindRaidConfig( data.room );
-							console.log( "Trying to send desktop notif..." );
 							var notification = null;
 							var title = "";
 							if ( data.language === "EN" ) {
@@ -718,9 +825,9 @@ function SendDesktopNotif( data ) {
 								document.getElementById( data.id + '-btn' ).classList.add( "secondary" );
 								notification.close();
 							}
-							console.log( "Sent desktop notif." );
+							console.log( `Sent desktop notif for: ${data.room}`, settings.notification );
 						} catch ( error ) {
-							console.log( "Error sending desktop notif: " + error );
+							console.log( `Error sending desktop notif for: ${data.room}`, error, settings.notification );
 						}
 					}
 				}
@@ -738,7 +845,7 @@ function SendJoinCommand( id ) {
 			raidCode: id
 		}, "*" );
 	} catch ( error ) {
-		console.log( "Error sending message to Viramate: " + error );
+		console.log( `Error sending join command to Viramate: ${error.message}`, error );
 	}
 }
 
@@ -831,8 +938,7 @@ function SetTime() {
 				timeDisplay.classList.add( "strike-time" );
 			}
 		} catch ( err ) {
-			console.log( "Error setting Strike Time reminder: " + err );
-			console.log( "Current Strike Time settings: " + settings.strikeTime );
+			console.log( `Error setting StrikeTime reminder: ${err.message}`, err );
 		}
 	} else {
 		if ( document.getElementById( "time-until" ) ) {

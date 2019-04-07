@@ -103,6 +103,10 @@ function CreateHorizontalNormalRaidRow( data ) {
 	idTD.id = data.id + '-label';
 	idTD.classList.add( "center", "aligned" );
 	idTD.innerHTML = data.id;
+	var healthTD = document.createElement( "td" );
+	healthTD.id = data.id + '-health';
+	healthTD.classList.add( "center", "aligned" );
+	healthTD.innerHTML = "Unknown";
 	var timeTD = document.createElement( "td" );
 	timeTD.id = data.id + '-time';
 	timeTD.classList.add( "center", "aligned" );
@@ -125,6 +129,7 @@ function CreateHorizontalNormalRaidRow( data ) {
 		joinTD.appendChild( joinButton );
 		newLine.appendChild( imageTD );
 		newLine.appendChild( idTD );
+		newLine.appendChild( healthTD );
 		newLine.appendChild( timeTD );
 		newLine.appendChild( joinTD );
 		joinButton.addEventListener( "click", function ( event ) {
@@ -161,10 +166,20 @@ function CreateHorizontalFullRaidRow( data ) {
 	idSpan.innerHTML = data.id;
 	nameDiv.appendChild( idSpan );
 	contentTD.appendChild( nameDiv );
+	var bottomDiv = document.createElement( "div" );
+	bottomDiv.classList.add( "ui", "two", "column", "divided", "grid" );
 	var messageDiv = document.createElement( "div" );
 	messageDiv.innerHTML = data.message;
+	messageDiv.classList.add( "column", "item" );
+	var healthDiv = document.createElement( "div" );
+	healthDiv.innerHTML = data.message;
+	healthDiv.classList.add( "column", "item" );
+	healthDiv.id = data.id + '-health';
+	healthDiv.innerHTML = "Unknown";
+	bottomDiv.appendChild( messageDiv );
+	bottomDiv.appendChild( healthDiv );
 	contentTD.innerHTML += '<div class="ui divider"></div>';
-	contentTD.appendChild( messageDiv );
+	contentTD.appendChild( bottomDiv );
 	var joinTD = document.createElement( "td" );
 	joinTD.classList.add( "center", "aligned" );
 	var timediv = document.createElement( "div" );
@@ -342,60 +357,53 @@ function CreateVerticalFullRaidRow( data ) {
 	}
 }
 
-function UpdateRaidRow( data ) {
-//	console.log( "Updating raid row for data: ", data );
-	if ( settings.layout.orientation === "horizontal" ) {
-		if ( raids.length > settings.layout.raidMaxResults ) {
-			console.log( 'Too many raids (' + raids.length + ') for raidMaxResults: ' + settings.layout.raidMaxResults );
-			try {
-				var raidDIV = document.getElementById( raids[ 0 ].id );
-				document.getElementById( "table-body" ).removeChild( raidDIV );
-				raids.splice( 0, 1 );
-			} catch ( error ) {
-				console.log( "Error removing raid row that was over max results: " + error );
-			}
-		} else {
-			var raidDIV = document.getElementById( data.id );
-			if ( moment().diff( data.time, "seconds" ) > settings.layout.raidTimeout ) {
-				console.log( 'Raid too old(' + moment().diff( data.time, "seconds" ) + ') for selected timeout: ' + settings.layout.raidTimeout );
-				try {
-					document.getElementById( "table-body" ).removeChild( raidDIV );
-					raids.splice( raids.indexOf( data ), 1 );
-				} catch ( error ) {
-					console.log( "Error removing raid row that too old: " + error );
-				}
-			} else {
-				if ( settings.layout.infoLevel === "normal" || settings.layout.infoLevel === "full" ) {
-					document.getElementById( data.id + '-time' ).innerHTML = moment().diff( data.time, "seconds" ) + ' secs ago';
-				}
-			}
+const groupBy = ( array, fn ) => array.reduce( ( result, item ) => {
+	const key = fn( item );
+	if ( !result[ key ] ) result[ key ] = [];
+	result[ key ].push( item );
+	return result;
+}, {} );
+
+function TrimExtraRaids() {
+	if ( raids.length > settings.layout.raidMaxResults ) {
+		console.log( 'Too many raids (' + raids.length + ') for raidMaxResults: ' + settings.layout.raidMaxResults );
+		try {
+			var raidDIV = document.getElementById( raids[ 0 ].id );
+			document.getElementById( "table-body" ).removeChild( raidDIV );
+			raids.splice( 0, 1 );
+		} catch ( error ) {
+			console.log( "Error removing raid row that was over max results: " + error );
 		}
 	} else {
-		if ( raids.filter( raid => raid.room === data.room ).length > settings.layout.raidMaxResults ) {
-			var roomedRaids = raids.filter( raid => raid.room === data.room );
-			console.log( 'Too many raids (' + roomedRaids.length + ') in room ' + data.room + ' for raidMaxResults: ' + settings.layout.raidMaxResults );
-			try {
-				var raidDIV = document.getElementById( roomedRaids[ 0 ].id );
-				document.getElementById( roomedRaids[ 0 ].room + "-table-body" ).removeChild( raidDIV );
-				raids.splice( raids.indexOf( roomedRaids[ 0 ] ), 1 );
-			} catch ( error ) {
-				console.log( "Error removing raid row that was over max results: " + error );
-			}
-		} else {
-			var raidDIV = document.getElementById( data.id );
-			if ( moment().diff( data.time, "seconds" ) > settings.layout.raidTimeout ) {
-				console.log( 'Raid too old(' + moment().diff( data.time, "seconds" ) + ') for selected timeout: ' + settings.layout.raidTimeout );
+		var groupedRaids = groupBy( raids, i => i.room );
+		Object.keys( groupedRaids ).forEach( function ( raidRoom ) {
+			if ( groupedRaids[ raidRoom ].length > settings.layout.raidMaxResults ) {
+				console.log( 'Too many raids (' + groupedRaids[ raidRoom ].length + ') in room ' + raidRoom + ' for raidMaxResults: ' + settings.layout.raidMaxResults );
 				try {
-					document.getElementById( data.room + "-table-body" ).removeChild( raidDIV );
-					raids.splice( raids.indexOf( data ), 1 );
+					var raidDIV = document.getElementById( groupedRaids[ raidRoom ][ 0 ].id );
+					document.getElementById( groupedRaids[ raidRoom ][ 0 ].room + "-table-body" ).removeChild( raidDIV );
+					raids.splice( raids.indexOf( groupedRaids[ raidRoom ][ 0 ] ), 1 );
 				} catch ( error ) {
-					console.log( "Error removing raid row that too old: " + error );
-				}
-			} else {
-				if ( settings.layout.infoLevel === "normal" || settings.layout.infoLevel === "full" ) {
-					document.getElementById( data.id + '-time' ).innerHTML = moment().diff( data.time, "seconds" ) + ' secs ago';
+					console.log( "Error removing raid row that was over max results: " + error );
 				}
 			}
+		} );
+	}
+}
+
+function UpdateRaidRow( data ) {
+	data.timer++;
+	if ( data.timer > settings.layout.raidTimeout ) {
+		console.log( 'Raid too old(' + data.timer + ' secs) for selected timeout: ' + settings.layout.raidTimeout );
+		if ( settings.layout.orientation === "horizontal" ) {
+			document.getElementById( "table-body" ).removeChild( document.getElementById( data.id ) );
+		} else {
+			document.getElementById( data.room + "-table-body" ).removeChild( document.getElementById( data.id ) );
+		}
+		raids.splice( raids.indexOf( data ), 1 );
+	} else {
+		if ( settings.layout.infoLevel !== "compact" ) {
+			document.getElementById( data.id + '-time' ).textContent = data.timer + ' secs ago';
 		}
 	}
 }
@@ -425,7 +433,7 @@ function CreateHorizontalCompactRaidTable() {
 	console.log( "Creating Horizontal Compact raid table..." );
 	var raidTable = document.createElement( "table" );
 	raidTable.id = "raid-table";
-	raidTable.classList.add( "ui", "blue", "celled", "unstackable", "selectable", "table", "compact" );
+	raidTable.classList.add( "ui", "blue", "celled", "unstackable", "table", "compact" );
 	if ( document.getElementById( "selected-raids-label" ) === null ) {
 		var selectedRaidsDiv = document.createElement( "div" );
 		selectedRaidsDiv.classList.add( "ui", "secondary", "inverted", "blue", "segment" );
@@ -448,7 +456,7 @@ function CreateHorizontalNormalRaidTable() {
 	console.log( "Creating Horizontal Normal raid table..." );
 	var raidTable = document.createElement( "table" );
 	raidTable.id = "raid-table";
-	raidTable.classList.add( "ui", "blue", "unstackable", "celled", "selectable", "compact", "table" );
+	raidTable.classList.add( "ui", "blue", "unstackable", "celled", "compact", "table" );
 	if ( document.getElementById( "selected-raids-label" ) === null ) {
 		var selectedRaidsDiv = document.createElement( "div" );
 		selectedRaidsDiv.classList.add( "ui", "secondary", "inverted", "blue", "segment" );
@@ -456,7 +464,7 @@ function CreateHorizontalNormalRaidTable() {
 		selectedRaidsDiv.innerHTML = '<div id="selected-raids-label">Selected Raids:</div><div id="selected-raids" class="ui segment">No raids selected. Please search for a raid in the search bar above.</div>';
 		document.getElementById( "header" ).appendChild( selectedRaidsDiv );
 	}
-	raidTable.innerHTML = '<thead><tr><th class="center aligned eight wide">Raid Name</th><th class="center aligned single line two wide">Raid ID</th><th class="center aligned single line three wide">Time Tweeted</th><th class="center aligned single line three wide">Join Raid</th></tr></thead>';
+	raidTable.innerHTML = '<thead><tr><th class="center aligned six wide">Name</th><th class="center aligned single line two wide">ID</th><th class="center aligned single line two wide">Health</th><th class="center aligned single line three wide">Time Tweeted</th><th class="center aligned single line three wide">Join Raid</th></tr></thead>';
 	var raidTableBody = document.createElement( "tbody" );
 	raidTableBody.id = "table-body";
 	try {
@@ -471,7 +479,7 @@ function CreateHorizontalFullRaidTable() {
 	console.log( "Creating Horizontal Full raid table..." );
 	var raidTable = document.createElement( "table" );
 	raidTable.id = "raid-table";
-	raidTable.classList.add( "ui", "blue", "unstackable", "celled", "selectable", "compact", "table" );
+	raidTable.classList.add( "ui", "blue", "unstackable", "celled", "compact", "table" );
 	if ( document.getElementById( "selected-raids-label" ) === null ) {
 		var selectedRaidsDiv = document.createElement( "div" );
 		selectedRaidsDiv.classList.add( "ui", "secondary", "inverted", "blue", "segment" );
@@ -598,6 +606,9 @@ function LoadSavedRaids() {
 
 function AddSelectedRaid( room ) {
 	console.log( "Adding selected raid: " + room );
+	if ( document.getElementById( "welcome" ) ) {
+		document.getElementById( "container" ).removeChild( document.getElementById( "welcome" ) );
+	}
 	if ( settings.layout.orientation === "horizontal" ) {
 		if ( document.getElementById( room ) === null ) {
 			if ( document.getElementById( "selected-raids" ).innerHTML === "No raids selected. Please search for a raid in the search bar above." ) {
@@ -868,6 +879,10 @@ function AddSelectedVerticalFullRaid( raid ) {
 	} catch ( error ) {
 		console.log( "Error adding Vertical Full raid: " + error );
 	}
+}
+
+function UpdateRaidHealth( data ) {
+	document.getElementById( data.id + '-health' ).textContent = data.percent + ' %';
 }
 
 function CalculatePoints( room, isFull ) {

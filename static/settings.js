@@ -91,6 +91,7 @@ function CreateSettingsModalFrame() {
 	result += '<div class="item" data-value="beeps">Beeps Appear</div>';
 	result += '<div class="item" data-value="lily-event-ringring">GBF - Lily (Event) - Ring Ring</div>';
 	result += '<div class="item" data-value="andira-oniichan">GBF - Andira - Onii-chan</div>';
+	result += '<div class="item" data-value="funf-dancho">GBF - Funf - DANCHO!</div>';
 	result += '<div class="item" data-value="titanfall-droppingnow">Titanfall - Dropping Now</div>';
 	result += '<div class="item" data-value="sakura-hoeeeee">GBF - Sakura (Event) - HOEEEEE</div>';
 	result += '<div class="item" data-value="alarm-foghorn">Alarm - Foghorn</div>';
@@ -136,6 +137,7 @@ function LoadSavedSettings() {
 				Object.assign( settings.layout, tempSettings.layout );
 				settings.viramateID = tempSettings.viramateID;
 				settings.disableJoined = tempSettings.disableJoined;
+				settings.disablePopups = tempSettings.disablePopups;
 				settings.strikeTime = tempSettings.strikeTime;
 				console.log( "Assigned saved settings to current settings." );
 			} catch ( error ) {
@@ -153,6 +155,9 @@ function LoadSavedSettings() {
 		SetTime();
 		if ( settings.disableJoined ) {
 			document.getElementById( "join-disable-input" ).checked = true;
+		}
+		if ( settings.disablePopups ) {
+			document.getElementById( "popup-disable-input" ).checked = true;
 		}
 		if ( settings.newsSeen ) {
 			document.getElementById( "news-message" ).classList.add( "hidden" );
@@ -223,6 +228,7 @@ function SetupControls() {
 		var clipboard = new Clipboard( '.copy-div', {
 			text: function ( trigger ) {
 				console.log( "Copying to clipboard: " + trigger.dataset.clipboard );
+				toastr["success"]("Raid ID copied to clipboard.");
 				return trigger.dataset.clipboard;
 			}
 		} );
@@ -256,6 +262,15 @@ function SetupControls() {
 				settings.disableJoined = true;
 			} else {
 				settings.disableJoined = false;
+			}
+			localStorage.setItem( "savedSettings", JSON.stringify( settings ) );
+		} );
+
+		document.getElementById( "popup-disable-input" ).addEventListener( 'change', function ( evt ) {
+			if ( document.getElementById( "popup-disable-input" ).checked ) {
+				settings.disablePopups = true;
+			} else {
+				settings.disablePopups = false;
 			}
 			localStorage.setItem( "savedSettings", JSON.stringify( settings ) );
 		} );
@@ -539,17 +554,6 @@ function SetupControls() {
 				setFluidWidth: false,
 				lastResort: "bottom left",
 				hoverable: true,
-				jitter: 50
-			} );
-
-		$( '.donate' )
-			.popup( {
-				inline: true,
-				position: "bottom left",
-				perserve: true,
-				setFluidWidth: false,
-				lastResort: "bottom left",
-				hoverable: false,
 				jitter: 50
 			} );
 
