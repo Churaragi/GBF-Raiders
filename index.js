@@ -221,7 +221,7 @@ if ( cluster.isMaster ) {
 			io = require( 'socket.io' ).listen( sslServer );
 		} else {
 			let server = require( 'http' ).createServer();
-			var port = process.env.PORT || 80;
+			var port = process.env.PORT;
 			server.listen( port );
 			io = require( 'socket.io' ).listen( server );
 		}
