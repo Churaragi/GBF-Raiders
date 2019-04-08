@@ -274,7 +274,8 @@ if ( cluster.isMaster ) {
 	
 	try {
 		let server = require( 'http' ).createServer( app );
-		server.listen( 80 );
+		const PORT2 = process.env.PORT2;
+		server.listen( PORT2 );
 	}
 	catch ( error ) {
 		console.log( "Error setting up websockets: ", error );
