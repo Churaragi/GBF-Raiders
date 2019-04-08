@@ -261,6 +261,7 @@ if ( cluster.isMaster ) {
 	}
 	StartTwitterStream( twitterOptions );
 } else {
+	
 	let app = express();
 	if ( process.env.sslEnabled === "true" ) {
 		const options = {
@@ -270,8 +271,15 @@ if ( cluster.isMaster ) {
 		let sslServer = https.createServer( options, app );
 		sslServer.listen( 443 );
 	}
-	let server = require( 'http' ).createServer( app );
-	server.listen( 80 );
+	
+	try {
+		let server = require( 'http' ).createServer( app );
+		server.listen( 80 );
+	}
+	catch ( error ) {
+		console.log( "Error setting up websockets: ", error );
+	}
+	
 	app.set( 'json spaces', 0 );
 	app.use( helmet() );
 	//app.use( morgan( 'combined' ) );
